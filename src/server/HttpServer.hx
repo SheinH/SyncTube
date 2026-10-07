@@ -121,6 +121,13 @@ class HttpServer {
 			return;
 		}
 
+		if (url.pathname == "/api/time") {
+			res.setHeader("content-type", getMimeType("json"));
+			res.setHeader("cache-control", "no-store");
+			res.end(haxe.Json.stringify(main.getPlaybackState()));
+			return;
+		}
+
 		if (allowLocalRequests && req.socket.remoteAddress == req.socket.localAddress
 			|| allowedLocalFiles[url.pathname]) {
 			if (isMediaExtension(ext)) {

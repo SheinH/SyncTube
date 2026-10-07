@@ -456,6 +456,17 @@ class Main {
 		return userList.admins.length > 0;
 	}
 
+	public function getPlaybackState():{time:Float, paused:Bool, rate:Float} {
+		if (videoList.length == 0) return {time: 0, paused: true, rate: 1};
+		final maxTime = videoList.currentItem.duration;
+		final time = Math.min(videoTimer.getTime(), maxTime);
+		return {
+			time: time,
+			paused: videoTimer.isPaused(),
+			rate: videoTimer.getRate()
+		};
+	}
+
 	public function replayLog(events:Array<ServerEvent>):Void {
 		final timer = new Timer(1000);
 		timer.run = () -> {
