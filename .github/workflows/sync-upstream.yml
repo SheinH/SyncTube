@@ -1,0 +1,66 @@
+name: Sync upstream
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: sync-upstream
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/RblSb/SyncTube.git
+          git fetch upstream master
+          if git merge-base --is-ancestor upstream/master HEAD; then
+            echo "Already up to date"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git merge --no-commit --no-ff upstream/master || true
+          git rev-parse -q --verify MERGE_HEAD > /dev/null
+          # build/server.js is generated, it is rebuilt below instead of merged
+          git checkout upstream/master -- build/server.js
+          conflicts=$(git diff --name-only --diff-filter=U)
+          if [ -n "$conflicts" ]; then
+            echo "::error::Merge conflicts with upstream: $conflicts"
+            exit 1
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - uses: krdlab/setup-haxe@v2
+        if: steps.merge.outputs.changed == 'true'
+        with:
+          haxe-version: 4.3.7
+
+      - name: Build server
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          haxelib install build-server.hxml --always
+          haxe build-server.hxml
+
+      - name: Check server
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          npm ci
+          PORT=4200 node build/server.js &
+          curl -sf --retry 15 --retry-connrefused --retry-delay 2 http://localhost:4200/api/time | grep '"time"'
+
+      - name: Push
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          git add build/server.js
+          git commit -m "Merge upstream"
+          git push
