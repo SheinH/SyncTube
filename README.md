@@ -99,6 +99,7 @@ It just works, but you can also check [user/ folder](/user/README.md) for server
 
 ## Plugins
 - [octosubs](https://github.com/RblSb/SyncTube-octosubs) - More colorful `ASS`/`SSA` subtitles support
+- [jassub](/res/plugins/jassub/README.md) - Full `ASS`/`SSA` subtitles support with libass (bundled)
 - [qswitcher](https://github.com/aNNiMON/SyncTube-QSwitcher) - Raw video quality switcher
 
 ## Integrations
