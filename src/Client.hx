@@ -26,6 +26,8 @@ class Client {
 	public final req:IncomingMessage;
 	public final id:Int;
 	public var uuid:String;
+	/** Server-only: reconnected after being leader, waits for login to get leader back **/
+	public var isReturningLeader = false;
 	public var isAlive = true;
 	#end
 	public var name:String;

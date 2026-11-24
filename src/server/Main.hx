@@ -42,6 +42,8 @@ class Main {
 	static inline var VIDEO_SKIP_DELAY = 1000;
 	static inline var FLASHBACKS_COUNT = 50;
 	static inline var FLASHBACK_DIST = 30;
+	/** Time for disconnected leader to reconnect (reload, network blip) before server pause **/
+	static inline var LEADER_RECONNECT_MS = 10000;
 	static inline var EMPTY_ROOM_CALLBACK_DELAY = 5000;
 
 	final rootDir = '$__dirname/..';
@@ -83,6 +85,8 @@ class Main {
 		to stopped server time.
 	**/
 	var emptyRoomCallbackTimer:Null<Timer>;
+	var leaderReturnUuid:Null<String>;
+	var leaderReturnTimer:Null<Timer>;
 
 	static function main():Void {
 		new Main({
@@ -531,6 +535,11 @@ class Main {
 		onMessage(client, {
 			type: Connected
 		}, true);
+		if (leaderReturnUuid == uuid) {
+			// restore after login, so leader gets broadcasted with final name
+			client.isReturningLeader = true;
+			Timer.delay(() -> restoreLeader(client), 1500);
+		}
 
 		ws.on("message", (data:js.node.Buffer) -> {
 			final obj = wsEventParser.fromJson(data.toString());
@@ -545,10 +554,46 @@ class Main {
 			onMessage(client, obj, false);
 		});
 
-		ws.on("close", err -> {
+		ws.on("close", (code:Int, reason:Dynamic) -> {
+			trace(Date.now().toString(), 'Client ${client.name} socket closed (code $code)');
 			onMessage(client, {
 				type: Disconnected
 			}, true);
+		});
+	}
+
+	function onLeaderDisconnected(client:Client):Void {
+		cancelLeaderReturn();
+		if (videoList.length == 0) return;
+		leaderReturnUuid = client.uuid;
+		leaderReturnTimer = Timer.delay(() -> {
+			leaderReturnTimer = null;
+			leaderReturnUuid = null;
+			if (clients.hasLeader() || videoList.length == 0) return;
+			videoTimer.pause();
+			videoTimer.isServerPause = true;
+		}, LEADER_RECONNECT_MS);
+	}
+
+	function cancelLeaderReturn():Void {
+		leaderReturnTimer?.stop();
+		leaderReturnTimer = null;
+		leaderReturnUuid = null;
+	}
+
+	function restoreLeader(client:Client):Void {
+		if (!client.isReturningLeader) return;
+		client.isReturningLeader = false;
+		if (leaderReturnUuid != client.uuid || !clients.contains(client)) return;
+		if (clients.hasLeader()) return;
+		cancelLeaderReturn();
+		trace(Date.now().toString(), 'Leader ${client.name} reconnected');
+		clients.setLeader(client.name);
+		broadcast({
+			type: SetLeader,
+			setLeader: {
+				clientName: client.name
+			}
 		});
 	}
 
@@ -607,12 +652,7 @@ class Main {
 				Utils.sortedPush(freeIds, client.id);
 				clients.remove(client);
 				sendClientList();
-				if (client.isLeader) {
-					if (videoList.length > 0) {
-						videoTimer.pause();
-						videoTimer.isServerPause = true;
-					}
-				}
+				if (client.isLeader) onLeaderDisconnected(client);
 				skipVotes.remove(client.name);
 				if (skipVotes.length > 0) {
 					final required = Math.ceil(clients.length * config.voteSkipRatio);
@@ -732,6 +772,7 @@ class Main {
 					}
 				});
 				sendClientListExcept(client);
+				if (client.isReturningLeader) restoreLeader(client);
 
 			case PasswordRequest:
 			case LoginError:
@@ -1014,6 +1055,7 @@ class Main {
 					if (!checkPermission(client, SetLeaderPerm)) return;
 				}
 				videoTimer.isServerPause = false;
+				cancelLeaderReturn();
 				clients.setLeader(clientName);
 				broadcast({
 					type: SetLeader,
