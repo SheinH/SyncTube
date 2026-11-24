@@ -14,6 +14,16 @@ client.JsApi.addPlugin('jassub');
 
 Subtitles from other sites are loaded through `/proxy`, so set `"enableProxy": true` in `user/config.json` for them.
 
+### Fonts
+Fonts are taken from `user/res/fonts/` (indexed by `fonts.json`), then from the `.ass` file itself, then from the viewer's system (Chromium, only with local fonts permission).
+Missing fonts fall back to Liberation Sans, so text can look different or go off screen.
+
+To extract font attachments from MKV releases (requires `ffmpeg` and `ffprobe`):
+```sh
+node res/plugins/jassub/extract-fonts.js path/to/folder-or-file.mkv ...
+```
+Duplicates are skipped. Fonts copied manually need the index rebuilt with the same command without arguments.
+
 ### Notes
 - Subtitles are drawn on canvas over the video, so browser's native video fullscreen is switched to player container fullscreen.
 - iOS Safari native video fullscreen can't show plugin subtitles.
